@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenIPC · Camera</title>
+<style>
+  :root { --bg:#0f1420; --panel:#171d2c; --line:#2a3350; --txt:#e6ebf5;
+          --muted:#8b96b0; --acc:#3b82f6; --ok:#22c55e; --warn:#f59e0b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,Segoe UI,Roboto,sans-serif;
+         background:var(--bg); color:var(--txt); }
+  header { display:flex; align-items:center; gap:12px; padding:14px 20px;
+           border-bottom:1px solid var(--line); background:#111726; }
+  header .dot { width:10px; height:10px; border-radius:50%; background:var(--muted); }
+  header .dot.client { background:var(--ok); }
+  header .dot.ap { background:var(--warn); }
+  header h1 { font-size:17px; margin:0; font-weight:600; }
+  header span.sub { color:var(--muted); font-size:12px; }
+  .wrap { display:grid; grid-template-columns: 1fr 320px; gap:20px; padding:20px;
+          max-width:1400px; margin:0 auto; }
+  @media (max-width:900px){ .wrap{ grid-template-columns:1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+           overflow:hidden; }
+  .panel > h2 { margin:0; padding:14px 16px; font-size:14px; border-bottom:1px solid var(--line);
+                color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  #stream { aspect-ratio:4/3; background:#000; width:100%; }
+  #stream iframe { width:100%; height:100%; border:0; display:block; }
+  form { padding:16px; display:flex; flex-direction:column; gap:12px; }
+  label { font-size:12px; color:var(--muted); display:flex; flex-direction:column; gap:5px; }
+  input { background:#0d1220; border:1px solid var(--line); color:var(--txt);
+          border-radius:8px; padding:9px 11px; font-size:14px; }
+  input:focus { outline:none; border-color:var(--acc); }
+  button { border:0; border-radius:8px; padding:10px; font-size:14px; font-weight:600;
+           cursor:pointer; }
+  .primary { background:var(--acc); color:#fff; }
+  .ghost { background:transparent; border:1px solid var(--line); color:var(--muted); }
+  .note { font-size:12px; color:var(--muted); line-height:1.5; }
+  .status { font-size:12px; padding:2px 0; min-height:16px; }
+  .ok { color:var(--ok); } .warn{ color:var(--warn); }
+</style>
+</head>
+<body>
+<header>
+  <div class="dot" id="modeDot"></div>
+  <h1>OpenIPC Camera</h1>
+  <span class="sub" id="modeText">connecting…</span>
+</header>
+
+<div class="wrap">
+  <div class="panel">
+    <h2>Live</h2>
+    <div id="stream">
+      <iframe id="player" allow="autoplay" title="Live stream"
+              src=""></iframe>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Network</h2>
+    <div class="status" id="apiStatus"></div>
+    <form id="wifiForm">
+      <label>Network name (SSID)
+        <input name="ssid" id="ssid" autocomplete="off" placeholder="e.g. HomeWiFi" required>
+      </label>
+      <label>Password
+        <input name="password" id="password" type="password" autocomplete="off"
+               placeholder="network password">
+      </label>
+      <button type="submit" class="primary" id="saveBtn">Save &amp; connect</button>
+      <div class="note">
+        Saving stores the network on the Pi. It will re-join this network on every
+        boot (after reboot it tries this network). If the Pi can't reach it, it
+        starts its own access point so this page stays reachable.
+      </div>
+      <button type="button" class="ghost" id="rebootBtn">Reboot Pi</button>
+    </form>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const modeDot=$('modeDot'), modeText=$('modeText');
+const host = location.hostname || 'localhost';
+
+function setMode(status){
+  const m = status.mode || 'ap';
+  const csid = status.connected_ssid || '';
+  modeDot.className = 'dot ' + (m==='client'?'client':'ap');
+  modeText.textContent = m==='client'
+    ? 'connected to “' + csid + '” · client mode'
+    : 'fallback AP active · ' + (status.ap_ssid || '') + ' · go to its network to configure';
+}
+
+async function loadStatus(){
+  const r = await fetch('/api/wifi');
+  const s = await r.json();
+  setMode(s);
+  if(s.ssid) { $('ssid').value = s.ssid; }
+  return s;
+}
+
+// go2rtc built-in player (auto WebRTC -> MSE). Same host, port 1984.
+$('player').src = 'http://' + host + ':1984/stream.html?src=camera';
+
+$('wifiForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn=$('saveBtn'); btn.disabled=true; btn.textContent='Saving…';
+  $('apiStatus').className='status'; $('apiStatus').textContent='';
+  const body = { ssid: $('ssid').value.trim(), password: $('password').value.trim() };
+  try {
+    const r = await fetch('/api/wifi', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+    $('apiStatus').className='status ok';
+    $('apiStatus').textContent='Saved “'+j.ssid+'”. Trying to connect now — this page may drop.';
+  } catch(err){
+    $('apiStatus').className='status warn';
+    $('apiStatus').textContent='Error: '+err.message;
+  }
+  btn.disabled=false; btn.textContent='Save & connect';
+  setTimeout(loadStatus, 3000);
+});
+
+$('rebootBtn').addEventListener('click', async () => {
+  if(!confirm('Reboot the Pi now?')) return;
+  await fetch('/api/reboot', {method:'POST'});
+});
+
+loadStatus();
+setInterval(loadStatus, 5000);
+</script>
+</body>
+</html>
