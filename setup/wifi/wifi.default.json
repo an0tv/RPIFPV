@@ -2,5 +2,6 @@
   "ssid": "",
   "password": "",
   "ap_ssid": "picam",
-  "ap_password": "picam"
+  "ap_password": "picam",
+  "mode": "auto"
 }

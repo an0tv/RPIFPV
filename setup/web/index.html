@@ -38,6 +38,10 @@
   .note { font-size:12px; color:var(--muted); line-height:1.5; }
   .status { font-size:12px; padding:2px 0; min-height:16px; }
   .ok { color:var(--ok); } .warn{ color:var(--warn); }
+  .mode-row { display:flex; align-items:center; gap:8px; }
+  .mode-label { font-size:12px; color:var(--muted); }
+  .mode-btn { flex:1; padding:8px; }
+  .mode-btn.active { background:var(--acc); color:#fff; border-color:var(--acc); }
 </style>
 </head>
 <body>
@@ -68,10 +72,17 @@
                placeholder="network password">
       </label>
       <button type="submit" class="primary" id="saveBtn">Save &amp; connect</button>
+      <div class="mode-row" id="modeRow">
+        <span class="mode-label">Mode</span>
+        <button type="button" class="ghost mode-btn" data-mode="auto">Auto</button>
+        <button type="button" class="ghost mode-btn" data-mode="ap">AP</button>
+        <button type="button" class="ghost mode-btn" data-mode="sta">Wi-Fi</button>
+      </div>
       <div class="note">
-        Saving stores the network on the Pi. It will re-join this network on every
-        boot (after reboot it tries this network). If the Pi can't reach it, it
-        starts its own access point so this page stays reachable.
+        <b>Auto</b> stays on your network and switches to its own AP if the
+        network becomes unreachable. <b>AP</b> forces the access point.
+        <b>Wi-Fi</b> forces joining the saved network. Saving stores the network
+        and it re-joins after every boot.
       </div>
       <button type="button" class="ghost" id="rebootBtn">Reboot Pi</button>
     </form>
@@ -84,12 +95,15 @@ const modeDot=$('modeDot'), modeText=$('modeText');
 const host = location.hostname || 'localhost';
 
 function setMode(status){
-  const m = status.mode || 'ap';
+  const role = status.role || 'ap';
   const csid = status.connected_ssid || '';
-  modeDot.className = 'dot ' + (m==='client'?'client':'ap');
-  modeText.textContent = m==='client'
+  modeDot.className = 'dot ' + (role==='client'?'client':'ap');
+  modeText.textContent = role==='client'
     ? 'connected to “' + csid + '” · client mode'
-    : 'fallback AP active · ' + (status.ap_ssid || '') + ' · go to its network to configure';
+    : 'AP active · ' + (status.ap_ssid || '') + ' · mode: ' + (status.mode || 'auto');
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === (status.mode || 'auto'));
+  });
 }
 
 async function loadStatus(){
@@ -130,6 +144,30 @@ $('wifiForm').addEventListener('submit', async e => {
 $('rebootBtn').addEventListener('click', async () => {
   if(!confirm('Reboot the Pi now?')) return;
   await fetch('/api/reboot', {method:'POST'});
+});
+
+document.querySelectorAll('.mode-btn').forEach(b => {
+  b.addEventListener('click', async () => {
+    const mode = b.dataset.mode;
+    const msg = mode === 'ap'
+      ? 'Switch to AP mode? You will be disconnected from the current network and must join the “' + 'picam' + '” network to get back to this page.'
+      : mode === 'sta'
+        ? 'Switch to Wi-Fi mode and join the saved network?'
+        : 'Switch to Auto mode (Wi-Fi with AP fallback)?';
+    if(!confirm(msg)) return;
+    $('apiStatus').className='status'; $('apiStatus').textContent='Applying mode “'+mode+'”…';
+    try {
+      const r = await fetch('/api/mode', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({mode})});
+      const j = await r.json();
+      if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+      $('apiStatus').className='status ok';
+      $('apiStatus').textContent='Mode set to “'+mode+'”.';
+    } catch(err){
+      $('apiStatus').className='status warn';
+      $('apiStatus').textContent='Error: '+err.message;
+    }
+    setTimeout(loadStatus, 2000);
+  });
 });
 
 loadStatus();

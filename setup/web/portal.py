@@ -5,7 +5,8 @@ portal.py — small web UI + config API for the PiCam Pi.
 Serves on :8080 so it is reachable both on your LAN (STA mode) and on the
 fallback AP. Two roles in one origin:
   * `/`            the page (live stream + "join a Wi-Fi network" form)
-  * `/api/wifi`    GET current status  |  POST save SSID/password and reconnect
+  * `/api/wifi`    GET current status  |  POST save SSID/password
+  * `/api/mode`    POST set mode: auto | ap | sta
   * `/api/reboot`  POST reboot the Pi
 
 The live stream <iframe> points at go2rtc's own player on :1984
@@ -74,7 +75,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, json.dumps({
                 "ssid": cfg.get("ssid", ""),
                 "ap_ssid": cfg.get("ap_ssid", "picam"),
-                "mode": "client" if st.get("connected_ssid") else "ap",
+                "mode": cfg.get("mode", "auto"),
+                "role": "client" if st.get("connected_ssid") else "ap",
                 **st,
             }))
         elif self.path == "/":
@@ -110,8 +112,9 @@ class Handler(BaseHTTPRequestHandler):
                 # allow joining an open network / clearing a saved password
                 cfg.pop("password", None)
             write_conf(cfg)
-            # re-evaluate role now (tear down AP, try to join). On reboot netd
-            # runs anyway, so a failure just brings the AP back.
+            write_conf(cfg)
+            # netd re-reads wifi.json every tick, but restart it for an
+            # *immediate* rejoin (otherwise the throttled retry waits STA_RETRY).
             try:
                 subprocess.Popen(["systemctl", "restart", "picam-net"],
                                  stdout=subprocess.DEVNULL,
@@ -119,6 +122,16 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 pass
             return self._send(200, json.dumps({"ok": True, "ssid": ssid}))
+        if self.path == "/api/mode":
+            mode = (data.get("mode") or "").strip()
+            if mode not in ("auto", "ap", "sta"):
+                return self._send(400, json.dumps(
+                    {"error": "mode must be one of: auto, ap, sta"}))
+            cfg = read_conf()
+            cfg["mode"] = mode
+            write_conf(cfg)
+            # netd re-reads wifi.json every loop tick; nothing to restart.
+            return self._send(200, json.dumps({"ok": True, "mode": mode}))
         if self.path == "/api/reboot":
             # small delay so the HTTP response flushes before reboot
             subprocess.Popen(["bash", "-c",

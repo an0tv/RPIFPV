@@ -78,7 +78,8 @@ done
 if [ -z "$CAM_SOURCE" ]; then
   echo "WARN: could not detect the UVC camera automatically."
   echo "      /etc/picam/go2rtc.yaml will use a placeholder source."
-  CAM_SOURCE="ffmpeg:device?video=/dev/video0#video=h264"
+  echo "      (After plugging the dongle in, re-run /opt/picam/cam-detect.sh.)"
+  CAM_SOURCE="ffmpeg:device?video=/dev/video0&input_format=mjpeg&video_size=720x576"
 fi
 
 # Render config (heredoc avoids sed-escaping the & and # inside the URL).
@@ -111,8 +112,9 @@ systemctl daemon-reload
 systemctl enable picam-net.service picam-camera.service picam-portal.service
 
 echo
-echo "==> done. First boot: the Pi tries its saved network for 15s,"
-echo "    otherwise starts AP '$(sed -n 's/.*"ap_ssid": *"\([^"]*\)".*/\1/p' /etc/picam/wifi.json || echo picam)'."
+echo "==> done. The Wi-Fi supervisor runs in 'auto' mode: it keeps the saved"
+echo "    network joined and switches to AP '$(sed -n 's/.*"ap_ssid": *"\([^"]*\)".*/\1/p' /etc/picam/wifi.json || echo picam)'"
+echo "    if the link is ever unreachable. Change mode in the web UI (Auto/AP/Wi-Fi)."
 echo
 echo "    Watch the stream:   http://<pi-ip>:8080   (or on the AP: http://10.42.0.1:8080)"
 echo "    Direct player:      http://<pi-ip>:1984/stream.html?src=camera"
