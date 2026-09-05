@@ -1,4 +1,4 @@
-# OpenIPC — Raspberry Pi Zero 2 W camera streamer
+# PiCam — Raspberry Pi Zero 2 W camera streamer
 
 Stream a USB **CVBS / S-Video capture dongle** (Arkmicro `18ec:5850`, appears as a
 plain UVC V4L2 device `/dev/video0`) to a web browser with **low latency and few
@@ -22,9 +22,9 @@ Arkmicro CVBS/S-Video dongle            the Pi Zero 2 W
 | Piece | Role |
 |---|---|
 | **go2rtc** | Single static daemon. Captures the V4L2 device (via ffmpeg device input, software x264) and re-serves it to browsers with WebRTC / MSE auto-negotiation. |
-| **openipc-net** (netd.sh) | On boot tries to join the network saved in `/etc/openipc/wifi.json`; if it can't within **15 s**, starts its own AP (`openipc-cam`) via NetworkManager. |
-| **openipc-portal** (portal.py) | Small web UI + API on `:8080`: embeds the live stream and the "join this Wi-Fi" form. |
-| **openipc-camera** | systemd unit that keeps go2rtc alive. |
+| **picam-net** (netd.sh) | On boot tries to join the network saved in `/etc/picam/wifi.json`; if it can't within **15 s**, starts its own AP (`picam`) via NetworkManager. |
+| **picam-portal** (portal.py) | Small web UI + API on `:8080`: embeds the live stream and the "join this Wi-Fi" form. |
+| **picam-camera** | systemd unit that keeps go2rtc alive. |
 
 > **Why software x264 and not the GPU encoder?** The Zero 2 W uses the same SoC
 > as a Pi 3, whose H.264 block isn't usable for generic UVC input and is anyway
@@ -44,9 +44,9 @@ setup/
   wifi/wifi.default.json
   web/portal.py         # :8080 UI + config API
   web/index.html        # viewer + "join a network" page
-  systemd/openipc-camera.service
-  systemd/openipc-net.service
-  systemd/openipc-portal.service
+  systemd/picam-camera.service
+  systemd/picam-net.service
+  systemd/picam-portal.service
 ```
 
 ## Quick start
@@ -70,8 +70,8 @@ setup/
 
 If the Pi can't join any saved network within 15 s, it starts an access point:
 
-- **SSID:** `openipc-cam`
-- **Password:** `openipc-cam`
+- **SSID:** `picam`
+- **Password:** `picam`
 - **Web UI:** `http://10.42.0.1:8080`
 
 Connect to that network with your phone/laptop, open the page, and use the
@@ -79,20 +79,20 @@ Connect to that network with your phone/laptop, open the page, and use the
 join that network immediately and again after every reboot. If it can never join,
 the AP comes back so you always have a way in.
 
-> Change the AP credentials/name by editing `/etc/openipc/wifi.json`
-> (`ap_ssid`, `ap_password`) then `systemctl restart openipc-net`.
+> Change the AP credentials/name by editing `/etc/picam/wifi.json`
+> (`ap_ssid`, `ap_password`) then `systemctl restart picam-net`.
 
 ## Tuning & operations
 
 **Camera not detected?** Plug it in and run:
 
 ```bash
-sudo /opt/openipc/cam-detect.sh            # inspect + print recommended source
-sudo /opt/openipc/cam-detect.sh passthrough   # zero-CPU MJPEG
+sudo /opt/picam/cam-detect.sh            # inspect + print recommended source
+sudo /opt/picam/cam-detect.sh passthrough   # zero-CPU MJPEG
 ```
 
-Edit `/etc/openipc/go2rtc.yaml` streams→camera with the printed line, then
-`systemctl restart openipc-camera`.
+Edit `/etc/picam/go2rtc.yaml` streams→camera with the printed line, then
+`systemctl restart picam-camera`.
 
 **PAL vs NTSC / which resolution.** The dongle usually advertises both
 `720x576` (PAL) and `720x480` (NTSC) MJPEG modes. `cam-detect.sh` picks the
@@ -107,9 +107,9 @@ falls back to MSE automatically.
 **Logs / status**
 
 ```bash
-journalctl -u openipc-camera -f    # go2rtc / ffmpeg
-journalctl -u openipc-net -f       # wifi role decisions
-tail -f /var/log/openipc-net.log
+journalctl -u picam-camera -f    # go2rtc / ffmpeg
+journalctl -u picam-net -f       # wifi role decisions
+tail -f /var/log/picam/netd.log
 curl http://localhost:8080/api/wifi      # current role + connected ssid
 ```
 
@@ -126,11 +126,12 @@ rewrite Wi-Fi credentials and reboot the device.
 - Software encode uses a few cores while someone is watching; with no viewers
   go2rtc stops the encoder (idle ≈ 0%).
 - AP and client share the one radio: while in AP mode the Pi is *not* on your
-  LAN, and vice-versa (see `openipc-net`).
+  LAN, and vice-versa (see `picam-net`).
 
 ## Files reference
 
-- `/etc/openipc/wifi.json` — persisted network + AP settings (chmod 600)
-- `/etc/openipc/go2rtc.yaml` — streaming config
-- `/opt/openipc/go2rtc` — go2rtc binary
-- `/opt/openipc/netd.sh`, `/opt/openipc/web/` — controller + portal
+- `/etc/picam/wifi.json` — persisted network + AP settings (chmod 600)
+- `/etc/picam/go2rtc.yaml` — streaming config
+- `/opt/picam/go2rtc` — go2rtc binary
+- `/opt/picam/netd.sh`, `/opt/picam/cam-detect.sh`, `/opt/picam/web/` — controller, camera probe, portal
+- `/var/log/picam/netd.log` — Wi-Fi role decisions

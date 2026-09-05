@@ -1,16 +1,15 @@
 # Wi-Fi role manager: tries the saved network at boot, falls back to its own AP.
 [Unit]
-Description=OpenIPC Wi-Fi role manager (STA or fallback AP)
+Description=PiCam Wi-Fi role manager (STA or fallback AP)
 After=NetworkManager.service network-online.target
 Wants=NetworkManager.service
-Before=openipc-camera.service
+Before=picam-camera.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/opt/openipc/netd.sh run
-# web UI triggers a re-evaluation after saving credentials
-ExecStopPost=
+ExecStart=/opt/picam/netd.sh
+# web UI triggers a re-evaluation after saving credentials via: systemctl restart picam-net
 Environment=CONNECT_TIMEOUT=15
 StandardOutput=journal
 StandardError=journal

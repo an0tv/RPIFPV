@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenIPC · Camera</title>
+<title>PiCam · Camera</title>
 <style>
   :root { --bg:#0f1420; --panel:#171d2c; --line:#2a3350; --txt:#e6ebf5;
           --muted:#8b96b0; --acc:#3b82f6; --ok:#22c55e; --warn:#f59e0b; }
@@ -43,7 +43,7 @@
 <body>
 <header>
   <div class="dot" id="modeDot"></div>
-  <h1>OpenIPC Camera</h1>
+  <h1>PiCam Camera</h1>
   <span class="sub" id="modeText">connecting…</span>
 </header>
 
@@ -96,7 +96,12 @@ async function loadStatus(){
   const r = await fetch('/api/wifi');
   const s = await r.json();
   setMode(s);
-  if(s.ssid) { $('ssid').value = s.ssid; }
+  // Only prefill the SSID input when it's empty and not focused, so the
+  // 5-second poll never overwrites what the user is typing.
+  const ssidEl = $('ssid');
+  if (s.ssid && ssidEl.value === '' && document.activeElement !== ssidEl) {
+    ssidEl.value = s.ssid;
+  }
   return s;
 }
 

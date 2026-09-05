@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-portal.py — small web UI + config API for the OpenIPC Pi.
+portal.py — small web UI + config API for the PiCam Pi.
 
 Serves on :8080 so it is reachable both on your LAN (STA mode) and on the
 fallback AP. Two roles in one origin:
@@ -14,15 +14,12 @@ The live stream <iframe> points at go2rtc's own player on :1984
 import json
 import os
 import subprocess
-import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-CONF = "/etc/openipc/wifi.json"
-NETD = "/opt/openipc/netd.sh"
-ROOT = "/opt/openipc/web"
+CONF = "/etc/picam/wifi.json"
+ROOT = "/opt/picam/web"
 PORT = int(os.environ.get("PORT", "8080"))
 WIFI_IF = os.environ.get("WIFI_IF", "wlan0")
-AP_IP = os.environ.get("AP_IP", "10.42.0.1")
 
 def read_conf():
     try:
@@ -42,17 +39,18 @@ def wifi_status():
     """Best-effort snapshot: are we a client, and of which network?"""
     out = {}
     try:
-        # connected ssid of wlan0
+        # SSID of the network in use ('*' marks the IN-USE row in terse output).
         r = subprocess.run(
-            ["nmcli", "-t", "-f", "active,ssid", "dev", "wifi", "list"],
+            ["nmcli", "-t", "-f", "IN-USE,SSID", "dev", "wifi", "list"],
             capture_output=True, text=True, timeout=10)
         active = [l.split(":", 1)[1] for l in r.stdout.splitlines()
-                  if l.startswith("yes:")]
+                  if l.startswith("*:")]
         out["connected_ssid"] = active[0] if active else ""
         r = subprocess.run(["nmcli", "-t", "-f", "GENERAL.STATE",
                             "device", "show", WIFI_IF],
                            capture_output=True, text=True, timeout=10)
-        out["device_state"] = r.stdout.strip().split(":")[-1].strip()
+        # bare value like "100 (connected)" / "30 (disconnected)"
+        out["device_state"] = r.stdout.strip()
     except Exception:
         pass
     return out
@@ -75,7 +73,7 @@ class Handler(BaseHTTPRequestHandler):
             st = wifi_status()
             self._send(200, json.dumps({
                 "ssid": cfg.get("ssid", ""),
-                "ap_ssid": cfg.get("ap_ssid", "openipc-cam"),
+                "ap_ssid": cfg.get("ap_ssid", "picam"),
                 "mode": "client" if st.get("connected_ssid") else "ap",
                 **st,
             }))
@@ -108,11 +106,14 @@ class Handler(BaseHTTPRequestHandler):
             cfg["ssid"] = ssid
             if password:
                 cfg["password"] = password
+            else:
+                # allow joining an open network / clearing a saved password
+                cfg.pop("password", None)
             write_conf(cfg)
             # re-evaluate role now (tear down AP, try to join). On reboot netd
             # runs anyway, so a failure just brings the AP back.
             try:
-                subprocess.Popen(["systemctl", "restart", "openipc-net"],
+                subprocess.Popen(["systemctl", "restart", "picam-net"],
                                  stdout=subprocess.DEVNULL,
                                  stderr=subprocess.DEVNULL)
             except Exception:
