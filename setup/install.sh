@@ -28,8 +28,9 @@ apt-get update
 # dnsmasq-base (NOT dnsmasq): NetworkManager's shared/hotspot mode needs the
 # dnsmasq binary, but the full dnsmasq package ships a standalone systemd
 # service that would fight NM for the DHCP/DNS port.
+# hostapd: NetworkManager needs it to actually host an Access Point.
 apt-get install -y --no-install-recommends \
-  ffmpeg v4l-utils network-manager dnsmasq-base ca-certificates curl unzip python3
+  ffmpeg v4l-utils network-manager hostapd dnsmasq-base ca-certificates curl unzip python3
 
 systemctl enable --now NetworkManager >/dev/null 2>&1 || true
 

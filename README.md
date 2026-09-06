@@ -71,7 +71,7 @@ If the Pi can't join a saved network, or its connection drops for ~20 s
 (e.g. 2.4 GHz interference), it starts an access point:
 
 - **SSID:** `picam`
-- **Password:** `picam`
+- **Password:** `picam1234`
 - **Web UI:** `http://10.42.0.1:8080`
 
 Connect to that network with your phone/laptop, open the page, and use the
@@ -89,6 +89,7 @@ back automatically if the network ever becomes unreachable.
 
 > Change the AP credentials/name by editing `/etc/picam/wifi.json`
 > (`ap_ssid`, `ap_password`). The mode is read live — no restart needed.
+> Note: WPA2 requires the AP password to be **8+ characters**.
 
 ## Tuning & operations
 

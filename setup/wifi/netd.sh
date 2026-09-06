@@ -73,8 +73,10 @@ start_ap() { # $1=ap_ssid  $2=ap_password
   nmcli radio wifi on  >/dev/null 2>&1 || true
   local args=(dev wifi hotspot ifname "$WIFI_IF" ssid "$ap_ssid")
   if [ -n "$ap_pw" ]; then args+=(password "$ap_pw"); fi
-  timeout "$STA_CONNECT_TIMEOUT" nmcli "${args[@]}" >/dev/null 2>&1 \
-    || log "hotspot command failed (may still be coming up)"
+  if ! err=$(timeout "$STA_CONNECT_TIMEOUT" nmcli "${args[@]}" 2>&1); then
+    log "hotspot failed: ${err}"
+    return 1
+  fi
 }
 
 # ---------------------------------------------------------------------------
