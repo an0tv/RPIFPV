@@ -16,7 +16,7 @@ FPS="${VIDEO_FPS:-30}"
 CONNECTOR="${DISPLAY_CONNECTOR:-}"   # e.g. HDMI-A-1 or DSI-1; empty = autodetect
 
 args=(--vo=gpu --gpu-context=drm --fs --no-border --no-osd-bar --really-quiet
-      --profile=low-latency --untimed
+      --profile=low-latency --cache=no --untimed --framedrop=vo
       --demuxer-lavf-o="video_size=$SIZE,input_format=mjpeg,framerate=$FPS")
 if [ -n "$CONNECTOR" ]; then
   args+=(--drm-connector="$CONNECTOR")
