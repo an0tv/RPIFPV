@@ -67,15 +67,26 @@ start_sta() { # $1=ssid  $2=password(optional)
 start_ap() { # $1=ap_ssid  $2=ap_password
   local ap_ssid="$1" ap_pw="${2:-}"
   if ap_active; then return 0; fi
+  # validate early so we log a clear hint instead of a cryptic nmcli error
+  if [ -n "$ap_pw" ] && [ "${#ap_pw}" -lt 8 ]; then
+    log "WARN: ap_password '$ap_pw' is too short; WPA2 needs 8+ characters"
+  fi
   log "starting access point '$ap_ssid' (IP $AP_IP)"
-  nmcli radio wifi off >/dev/null 2>&1 || true
-  sleep 1
-  nmcli radio wifi on  >/dev/null 2>&1 || true
+  # Drop any active client connection. Do NOT toggle the radio: on the Pi's
+  # brcmfmac that leaves wlan0 "unavailable" and the hotspot then fails with
+  # "Connection 'Hotspot' is not available on device wlan0".
+  nmcli dev disconnect "$WIFI_IF" >/dev/null 2>&1 || true
+  sleep 2
   local args=(dev wifi hotspot ifname "$WIFI_IF" ssid "$ap_ssid")
   if [ -n "$ap_pw" ]; then args+=(password "$ap_pw"); fi
   if ! err=$(timeout "$STA_CONNECT_TIMEOUT" nmcli "${args[@]}" 2>&1); then
+    # Never fail the script (set -e): log and let the next loop tick retry.
     log "hotspot failed: ${err}"
-    return 1
+  else
+    # `nmcli dev wifi hotspot` creates a connection profile named "Hotspot"
+    # with autoconnect=yes, which makes NetworkManager re-start the AP on the
+    # next boot and steal wlan0 from the home network. Disable that.
+    nmcli connection modify "Hotspot" connection.autoconnect no >/dev/null 2>&1 || true
   fi
 }
 
@@ -101,7 +112,13 @@ while true; do
   PASS=$(json_get password)
   APSSID=$(json_get ap_ssid);   [ -n "$APSSID" ] || APSSID="picam"
   APPASS=$(json_get ap_password)
+  # Mode precedence: transient override (/run = tmpfs, wiped on reboot) beats
+  # the persisted "mode" key. This is what makes the AP/STA buttons temporary
+  # instead of permanently bricking the Pi into AP mode across reboots.
   MODE=$(json_get mode);        [ -n "$MODE" ] || MODE="auto"
+  if [ -f /run/picam/mode.override ]; then
+    MODE=$(cat /run/picam/mode.override 2>/dev/null || echo auto)
+  fi
   case "$MODE" in auto|ap|sta) ;; *) MODE="auto" ;; esac
 
   case "$MODE" in

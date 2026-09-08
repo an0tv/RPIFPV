@@ -1,0 +1,21 @@
+# Fullscreen local camera preview on the attached screen (mpv via DRM/KMS).
+[Unit]
+Description=PiCam local display (fullscreen camera)
+After=multi-user.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/opt/picam/display.sh
+Restart=always
+RestartSec=3
+Environment=VIDEO_DEVICE=/dev/video0
+Environment=VIDEO_SIZE=640x480
+Environment=VIDEO_FPS=30
+# Set DISPLAY_CONNECTOR if autodetect picks the wrong output (e.g. HDMI-A-1, DSI-1)
+#Environment=DISPLAY_CONNECTOR=
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -43,9 +43,11 @@ setup/
   wifi/wifi.default.json
   web/portal.py         # :8080 UI + config API
   web/index.html        # viewer + network + mode controls
+  display/display.sh    # fullscreen local preview (mpv → DRM, no desktop)
   systemd/picam-camera.service
   systemd/picam-net.service
   systemd/picam-portal.service
+  systemd/picam-display.service
 ```
 
 ## Quick start
@@ -61,7 +63,8 @@ setup/
    sudo bash ~/setup/install.sh
    ```
 
-3. **Watch** — open one of:
+3. **Watch** — the attached screen shows a fullscreen preview automatically
+   (mpv rendering directly via DRM, no desktop). Remotely:
    - `http://<pi-ip>:8080` — combined page (stream + network settings)
    - `http://<pi-ip>:1984/stream.html?src=camera` — plain go2rtc player
 
@@ -83,9 +86,12 @@ back automatically if the network ever becomes unreachable.
 
 - **Auto** (default) — stay on the saved network; fall back to the AP when it's
   unreachable, and rejoin automatically when it comes back.
-- **AP** — force the access point now (handy when you're going to be next to the
-  Pi with no network, e.g. in the field).
-- **Wi-Fi** — force joining the saved network (no AP fallback).
+- **AP** — force the access point for this session only (resets to Auto on reboot).
+- **Wi-Fi** — force joining the saved network for this session only (no AP fallback).
+
+> The **AP**/**Wi-Fi** buttons are *temporary* — they reset to **Auto** on reboot
+> so the Pi always tries your home network first after a restart. Only the saved
+> SSID/password and AP credentials are persistent.
 
 > Change the AP credentials/name by editing `/etc/picam/wifi.json`
 > (`ap_ssid`, `ap_password`). The mode is read live — no restart needed.
@@ -141,7 +147,7 @@ rewrite Wi-Fi credentials and reboot the device.
 
 ## Files reference
 
-- `/etc/picam/wifi.json` — persisted network + AP settings + `mode` (chmod 600)
+- `/etc/picam/wifi.json` — persisted network + AP settings (chmod 600; mode override is transient in `/run/picam/mode.override`)
 - `/etc/picam/go2rtc.yaml` — streaming config
 - `/opt/picam/go2rtc` — go2rtc binary
 - `/opt/picam/netd.sh`, `/opt/picam/cam-detect.sh`, `/opt/picam/web/` — controller, camera probe, portal

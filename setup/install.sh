@@ -29,8 +29,9 @@ apt-get update
 # dnsmasq binary, but the full dnsmasq package ships a standalone systemd
 # service that would fight NM for the DHCP/DNS port.
 # hostapd: NetworkManager needs it to actually host an Access Point.
+# mpv: local fullscreen preview on the attached screen (no desktop needed).
 apt-get install -y --no-install-recommends \
-  ffmpeg v4l-utils network-manager hostapd dnsmasq-base ca-certificates curl unzip python3
+  ffmpeg v4l-utils network-manager hostapd dnsmasq-base ca-certificates curl unzip python3 mpv
 
 systemctl enable --now NetworkManager >/dev/null 2>&1 || true
 
@@ -47,7 +48,8 @@ mkdir -p "$INSTALL_DIR/web" /etc/picam /var/log/picam
 cp -r "$(dirname "$0")/web/." "$INSTALL_DIR/web/"
 cp "$(dirname "$0")/wifi/netd.sh" "$INSTALL_DIR/netd.sh"
 cp "$(dirname "$0")/cam-detect.sh" "$INSTALL_DIR/cam-detect.sh"
-chmod +x "$INSTALL_DIR/netd.sh" "$INSTALL_DIR/web/portal.py" "$INSTALL_DIR/cam-detect.sh"
+cp "$(dirname "$0")/display/display.sh" "$INSTALL_DIR/display.sh"
+chmod +x "$INSTALL_DIR/netd.sh" "$INSTALL_DIR/web/portal.py" "$INSTALL_DIR/cam-detect.sh" "$INSTALL_DIR/display.sh"
 chown -R "$RUN_USER":"$RUN_USER" "$INSTALL_DIR" 2>/dev/null || true
 
 # ---- go2rtc ---------------------------------------------------------------
@@ -64,8 +66,12 @@ if [ "$GO2RTC_VERSION" = "latest" ]; then
 else
   URL="https://github.com/AlexxIT/go2rtc/releases/download/$GO2RTC_VERSION/$G2A"
 fi
-curl -fsSL -o "$INSTALL_DIR/go2rtc" "$URL"
-chmod +x "$INSTALL_DIR/go2rtc"
+# Download to a temp file then mv over the target: overwriting a running
+# executable directly fails with "Text file busy" (ETXTBSY). mv (rename) is
+# atomic and the running process keeps its old inode.
+curl -fsSL -o "$INSTALL_DIR/go2rtc.download" "$URL"
+chmod +x "$INSTALL_DIR/go2rtc.download"
+mv -f "$INSTALL_DIR/go2rtc.download" "$INSTALL_DIR/go2rtc"
 
 # ---- camera detection & config -------------------------------------------
 echo "==> detecting camera"
@@ -110,7 +116,7 @@ chmod 600 /etc/picam/wifi.json
 echo "==> installing systemd units"
 cp "$(dirname "$0")/systemd/"*.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable picam-net.service picam-camera.service picam-portal.service
+systemctl enable picam-net.service picam-camera.service picam-portal.service picam-display.service
 
 echo
 echo "==> done. The Wi-Fi supervisor runs in 'auto' mode: it keeps the saved"

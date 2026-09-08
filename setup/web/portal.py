@@ -127,10 +127,23 @@ class Handler(BaseHTTPRequestHandler):
             if mode not in ("auto", "ap", "sta"):
                 return self._send(400, json.dumps(
                     {"error": "mode must be one of: auto, ap, sta"}))
-            cfg = read_conf()
-            cfg["mode"] = mode
-            write_conf(cfg)
-            # netd re-reads wifi.json every loop tick; nothing to restart.
+            # Only persist "auto". "ap" and "sta" are meant as a *temporary*
+            # switch for the current session, NOT a permanent state: if we
+            # saved "ap" to disk, the Pi would be stuck as an AP after reboot
+            # and never rejoin the home network. Instead write a transient
+            # override that /opt/picam/netd.sh reads, and let "auto" be the
+            # only durable mode.
+            if mode == "auto":
+                cfg = read_conf()
+                cfg.pop("mode", None)
+                write_conf(cfg)
+            # signal the running supervisor immediately
+            try:
+                os.makedirs("/run/picam", exist_ok=True)
+                with open("/run/picam/mode.override", "w") as f:
+                    f.write(mode + "\n")
+            except Exception:
+                pass
             return self._send(200, json.dumps({"ok": True, "mode": mode}))
         if self.path == "/api/reboot":
             # small delay so the HTTP response flushes before reboot
